@@ -1,29 +1,35 @@
 package com.parse.uberclone;
 
-import android.*;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Point;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
-import android.support.annotation.MainThread;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
+import android.view.Display;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.parse.FindCallback;
 import com.parse.ParseException;
@@ -33,6 +39,7 @@ import com.parse.ParseQuery;
 import com.parse.ParseUser;
 import com.parse.SaveCallback;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class RiderActivity extends FragmentActivity implements OnMapReadyCallback {
@@ -44,6 +51,98 @@ public class RiderActivity extends FragmentActivity implements OnMapReadyCallbac
     Button callUberButton;
 
     Boolean requestActive = false;
+
+    Handler handler = new Handler();
+
+    TextView infoTextView;
+
+    Boolean driverActive = false;
+
+    public void CheckForUpdates()
+    {
+        ParseQuery<ParseObject> query = ParseQuery.getQuery("Request");
+
+        query.whereEqualTo("username", ParseUser.getCurrentUser().getUsername());
+        query.whereExists("driverUsername");
+
+        query.findInBackground(new FindCallback<ParseObject>() {
+            @Override
+            public void done(List<ParseObject> objects, ParseException e) {
+                if (e == null && objects.size() > 0)
+                {
+                    driverActive = true;
+
+                    ParseQuery<ParseUser> query = ParseUser.getQuery();
+
+                    query.whereEqualTo("username", objects.get(0).getString("driverUsername"));
+
+                    query.findInBackground(new FindCallback<ParseUser>() {
+                        @Override
+                        public void done(List<ParseUser> objects, ParseException e) {
+                            if (e == null && objects.size() > 0)
+                            {
+                                ParseGeoPoint driverLocation = objects.get(0).getParseGeoPoint("location");
+
+                                if (Build.VERSION.SDK_INT < 23 || ContextCompat.checkSelfPermission(RiderActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                                {
+                                    Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+                                    if (lastKnownLocation != null)
+                                    {
+                                        ParseGeoPoint userLocation = new ParseGeoPoint(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+
+                                        Double distanceInKm = driverLocation.distanceInKilometersTo(userLocation);
+
+                                        Double distanceOneDP = (double) Math.round(distanceInKm * 10) / 10;
+
+                                        infoTextView.setText("Your driver is " + distanceOneDP.toString() + "km away!");
+
+                                        Point displaySizePx = new Point();
+                                        Display display = getWindowManager().getDefaultDisplay();
+                                        display.getSize(displaySizePx);
+
+                                        LatLng driverLocationLatLng = new LatLng(driverLocation.getLatitude(), driverLocation.getLongitude());
+                                        LatLng requestLocationLatLng = new LatLng(userLocation.getLatitude(), userLocation.getLongitude());
+
+                                        ArrayList<Marker> markers = new ArrayList<>();
+
+                                        markers.add(mMap.addMarker(new MarkerOptions().position(driverLocationLatLng).title("Driver Location")));
+                                        markers.add(mMap.addMarker(new MarkerOptions().position(requestLocationLatLng).title("Current Location").icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
+
+                                        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+                                        for (Marker marker : markers)
+                                        {
+                                            builder.include(marker.getPosition());
+                                        }
+
+                                        LatLngBounds bounds = builder.build();
+
+                                        int padding = 60;
+                                        CameraUpdate cu = CameraUpdateFactory.newLatLngBounds(bounds, displaySizePx.x, displaySizePx.y, padding);
+
+                                        mMap.animateCamera(cu);
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+
+                    callUberButton.setVisibility(View.INVISIBLE);
+
+                    handler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+
+                            CheckForUpdates();
+
+                        }
+                    }, 2000);
+                }
+            }
+        });
+
+    }
 
     public void Logout(View view)
     {
@@ -105,6 +204,8 @@ public class RiderActivity extends FragmentActivity implements OnMapReadyCallbac
                                 Toast.makeText(RiderActivity.this, "Requesting Uber...", Toast.LENGTH_SHORT).show();
                                 callUberButton.setText("Cancel Uber Request");
                                 requestActive = true;
+
+                                CheckForUpdates();
                             }
                         }
                     });
@@ -137,11 +238,14 @@ public class RiderActivity extends FragmentActivity implements OnMapReadyCallbac
 
     public void UpdateMap(Location location)
     {
-        LatLng userLocation = new LatLng(location.getLatitude(), location.getLongitude());
+        //if (driverActive != false) {
 
-        mMap.clear();
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15));
-        mMap.addMarker(new MarkerOptions().position(userLocation).title("Current Location"));
+            LatLng userLocation = new LatLng(location.getLatitude(), location.getLongitude());
+
+            mMap.clear();
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15));
+            mMap.addMarker(new MarkerOptions().position(userLocation).title("Current Location"));
+        //}
     }
 
     @Override
@@ -154,6 +258,8 @@ public class RiderActivity extends FragmentActivity implements OnMapReadyCallbac
         mapFragment.getMapAsync(this);
 
         callUberButton = (Button) findViewById(R.id.callUberButton);
+
+        infoTextView = (TextView) findViewById(R.id.infoTextView);
 
         ParseQuery<ParseObject> query = new ParseQuery<>("Request");
 
@@ -168,6 +274,8 @@ public class RiderActivity extends FragmentActivity implements OnMapReadyCallbac
                     {
                         requestActive = true;
                         callUberButton.setText("Cancel Uber Request");
+
+                        CheckForUpdates();
                     }
                 }
             }

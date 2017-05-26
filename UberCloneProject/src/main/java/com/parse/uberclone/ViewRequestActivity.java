@@ -24,6 +24,7 @@ import com.parse.ParseException;
 import com.parse.ParseGeoPoint;
 import com.parse.ParseObject;
 import com.parse.ParseQuery;
+import com.parse.ParseUser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,8 @@ public class ViewRequestActivity extends AppCompatActivity {
             final ParseGeoPoint geoPointLocation = new ParseGeoPoint(location.getLatitude(), location.getLongitude());
 
             query.whereNear("location", geoPointLocation);
+
+            query.whereDoesNotExist("driverUsername");
 
             query.setLimit(10);
 
@@ -168,6 +171,10 @@ public class ViewRequestActivity extends AppCompatActivity {
             public void onLocationChanged(Location location) {
 
                 UpdateListView(location);
+
+                ParseUser.getCurrentUser().put("location", new ParseGeoPoint(location.getLatitude(), location.getLongitude()));
+
+                ParseUser.getCurrentUser().saveInBackground();
             }
 
             @Override

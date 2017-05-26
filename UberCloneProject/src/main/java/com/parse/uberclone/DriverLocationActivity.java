@@ -1,9 +1,11 @@
 package com.parse.uberclone;
 
 import android.content.Intent;
+import android.graphics.Point;
 import android.net.Uri;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.view.Display;
 import android.view.View;
 
 import com.google.android.gms.maps.CameraUpdate;
@@ -11,6 +13,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -53,10 +56,10 @@ public class DriverLocationActivity extends FragmentActivity implements OnMapRea
                                     if (e == null)
                                     {
                                         Intent directionsIntent = new Intent(Intent.ACTION_VIEW,
-                                                Uri.parse("http://maps.google.com/maps?saddr=" + intent.getDoubleArrayExtra("driverLatitude") + "," +
-                                                        intent.getDoubleArrayExtra("driverLongitude") +
-                                                        "&daddr=" + intent.getDoubleArrayExtra("requestLatitude") + "," +
-                                                        intent.getDoubleArrayExtra("requestLongitude")));
+                                                Uri.parse("http://maps.google.com/maps?saddr=" + intent.getDoubleExtra("driverLatitude", 0) + "," +
+                                                        intent.getDoubleExtra("driverLongitude", 0) +
+                                                        "&daddr=" + intent.getDoubleExtra("requestLatitude", 0) + "," +
+                                                        intent.getDoubleExtra("requestLongitude", 0)));
 
                                         startActivity(directionsIntent);
                                     }
@@ -80,20 +83,15 @@ public class DriverLocationActivity extends FragmentActivity implements OnMapRea
     }
 
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
         intent = getIntent();
+
+        Point displaySizePx = new Point();
+        Display display = getWindowManager().getDefaultDisplay();
+        display.getSize(displaySizePx);
 
         LatLng driverLocation = new LatLng(intent.getDoubleExtra("driverLatitude", 0), intent.getDoubleExtra("driverLongitude", 0));
         LatLng requestLocation = new LatLng(intent.getDoubleExtra("requestLatitude", 0), intent.getDoubleExtra("requestLongitude", 0));
@@ -101,7 +99,7 @@ public class DriverLocationActivity extends FragmentActivity implements OnMapRea
         ArrayList<Marker> markers = new ArrayList<>();
 
         markers.add(mMap.addMarker(new MarkerOptions().position(driverLocation).title("Current Location")));
-        markers.add(mMap.addMarker(new MarkerOptions().position(requestLocation).title("Request Location")));
+        markers.add(mMap.addMarker(new MarkerOptions().position(requestLocation).title("Request Location").icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
 
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
         for (Marker marker : markers)
@@ -111,8 +109,8 @@ public class DriverLocationActivity extends FragmentActivity implements OnMapRea
 
         LatLngBounds bounds = builder.build();
 
-        int padding = 30;
-        CameraUpdate cu = CameraUpdateFactory.newLatLngBounds(bounds, padding);
+        int padding = 60;
+        CameraUpdate cu = CameraUpdateFactory.newLatLngBounds(bounds, displaySizePx.x, displaySizePx.y, padding);
 
         mMap.animateCamera(cu);
 
